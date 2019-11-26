@@ -1,0 +1,156 @@
+---
+title: "Proyecto final Business performance analysis"
+author: "Jon Ramírez Díaz"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+    toc: yes
+    
+---
+
+```{r setup, include=FALSE}
+library(xml2)
+library(rvest)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(xts)
+library(dygraphs)
+library(knitr)
+```
+
+## Introducción
+
+A continuación se desarrolla el proyecto final de Jon Ramírez Díaz de la asignatura Business performance analysis en la que se ha realizado un curso sobre R. En dicho proyecto se han tratado una serie de elementos que cubren un porcentaje de los contenidos trabajados durante el curso.
+
+## Recursos sobre expresiones regulares
+
+Para tratar los recursos sobre las **expresiones regulares** se han escogido dos páginas web que a mi entender desarrollan y explican muy bien este tema. Las páginas que he escogido han sido un blog desarrollado por [Diego Calvo](http://www.diegocalvo.es/expresiones-regulares-en-r/) y la web [RPubs](http://rpubs.com/ydmarinb/429756).
+
+En la primera, cabe destacar que se trata de un blog gestionado por Diego Calvo. Un Data Scientist y Project Manager que es el responsable de este blog sobre el universo Big Data y que proporciona información para el aprendizaje muy interesante. En esta página podemos encontrar numerosas funciones para trabajar con expresiones regulares. Además, nos proporciona muchísimos ejemplos, algo muy importante para lograr entender los conceptos correctamente.
+
+Respecto a la página de GPubs, cabe destacar que dispone de un formato mas organizado respecto a la comentada anteriormente. En la parte izquierda, disponemos de un pequeño índice que nos permite dirigirnos a la parte que nos interesa consultar de manera mucho más rápida. Es importante remarcar, que esta página contiene pocos ejemplos, algo que considero un error puesto que para el aprendizaje es muy conveniente.
+
+En conclusión, creo que las dos páginas son adecuadas para entender diferentes conceptos sobre las expresiones regulares. Dicho esto, me quedaría con el blog de Diego Calvo, puesto que como he expresado anteriormente, veo muy conveniente la variada utilización de ejemplos en este tipo de páginas que tienen como objetivo explicar conceptos o aclarar distintas dudas.
+
+## Recursos sobre Markdown
+
+En este caso, para profundizar sobre **Markdown** las paginas escogidas han sido [Digital Guide IONOS](https://www.ionos.es/digitalguide/paginas-web/desarrollo-web/tutorial-de-markdown/) y [Coding club](https://ourcodingclub.github.io/2016/11/24/rmarkdown-1.html). Ambas son dos páginas muy extensas en las que se explica este lenguaje de marcado.
+
+Respecto a la página Digital Guide IONOS, se trata de una página web en castellano que nos realiza una introducción al Markdown. Se trata de una página que realiza una explicación mayormente teórica y carece de ejemplos prácticos. Es por ello, que no me parece de las mejores páginas para informarnos sobre Markdown.
+
+En cuanto a la página Coding Club, destacar que está desarrollada en ingles. En esta página, podemos encontrar una breve introducción a lo que es Markdown y una explicación de cómo descargarlo. Se trata de una página en la que contamos con muchísimos ejemplos en forma de código para entenderlo correctamente. En general, se trata de una página muy completa y muy adecuada para informarse sobre Markdown.
+
+En mi opinión, la página Coding Club es mucho más adecuada para informarnos sobre Markdown. Los numerosos ejemplos en código que nos proporciona los considero muy adecuados y muy convenientes para su estudio.
+
+
+## Comparativa EUR/SEK vs EUR/NOK
+
+A continuación se ha realizado la comparativa de la evolución de dos distintas divisas frente al **Euro** durante el último año. Dichas divisas son la **Corona Sueca** y la **Corona Noruega**.
+
+```{r codigo,echo=FALSE,include=FALSE}
+
+url<-"http://www.finanzas.com/divisas/eur-sek/datos-historicos.html"
+tmp <- read_html(url)
+tmp <- html_nodes(tmp, "table")
+datos <- html_table(tmp[[1]])
+datos$Volumen <- NULL
+colnames(datos)<-c("fecha","apertura","cierre","dif","max","min")
+
+foo<- function(x){
+  x<-as.numeric(gsub(",",".",x))
+}
+
+datos[,2:6]<-sapply(datos[,2:6],foo)
+datos1 <- datos[nrow(datos):1,]
+
+foo <- function(x){
+  as.Date(x,format= "%d/%m/%Y")
+}
+
+eurosek <- ddply(datos1,.(),transform, fecha = foo(fecha))
+eurosek$.id<-NULL
+
+url<-"http://www.finanzas.com/divisas/eur-nok/datos-historicos.html"
+tm <- read_html(url)
+tm <- html_nodes(tm, "table")
+dat <- html_table(tm[[1]])
+dat$Volumen <- NULL
+colnames(dat)<-c("fecha","apertura","cierre","dif","max","min")
+
+foo<- function(x){
+  x<-as.numeric(gsub(",",".",x))
+}
+
+dat[,2:6]<-sapply(dat[,2:6],foo)
+dat1 <- dat[nrow(dat):1,]
+
+foo <- function(x){
+  as.Date(x,format= "%d/%m/%Y")
+}
+
+euronok <- ddply(dat1,.(),transform, fecha = foo(fecha))
+euronok$.id<-NULL
+
+tablafinal<- cbind(eurosek[,c(1,3)],euronok[,3])
+colnames(tablafinal)<- c("fecha", "cierre_eurosek","cierre_euronok")
+tablafinal1<-head(tablafinal)
+
+tablafinal$cierre_eurosek1<- 100*(tablafinal$cierre_eurosek/tablafinal$cierre_eurosek[1])
+tablafinal$cierre_euronok1<- 100*(tablafinal$cierre_euronok/tablafinal$cierre_euronok[1])
+
+grafico1<- ggplot(tablafinal, aes(x = fecha)) + 
+  geom_line(aes(y = cierre_eurosek1,color="euro/sek"))+
+  geom_line(aes(y = cierre_euronok1,color="euro/nok"))+ 
+  ggtitle("EUR/SEK vs EUR/NOK") + 
+  labs(x = "Fecha", 
+       y = "Valor cierre")+ 
+  theme(panel.background = element_rect(fill = "lightgrey"),
+  panel.grid.minor = element_line(linetype = "dotted"))+
+  theme_minimal()+theme(plot.title = element_text(hjust = 0.5))
+
+cierre_eurosek1_xts<- xts(tablafinal$cierre_eurosek1,order.by= eurosek$fecha,frecuency=365)
+cierre_euronok1_xts<- xts(tablafinal$cierre_euronok1,order.by= euronok$fecha,frecuency=365)
+
+dinamico<- cbind(cierre_eurosek1_xts,cierre_euronok1_xts)
+grafico2<- dygraph(dinamico,ylab="Valor cierre",xlab = "Fecha",
+  main="EUR/SEK vs EUR/NOK")%>%
+  dySeries("cierre_eurosek1_xts", label = "EUR/SEK") %>%
+  dySeries("cierre_euronok1_xts", label = "EUR/NOK") %>%
+  dyLegend(width = 350)
+
+```
+
+En un primer lugar, en esta tabla podemos observar brevemente los datos que se han utilizado para la elaboración del trabajo y como consecuencia la elaboración de los dos gráficos representados posteriormente. Como se podrá observar a continuación, nos hemos basado en el precio de cierre del mercado de divisas, puesto que se ha considerado que es el más significativo. Es importante remarcar, que en esta tabla los datos están en base 1.
+
+```{r tabla,echo=FALSE}
+kable(tablafinal1
+       , col.names = c("Fecha","Cierre EUR/SEK","Cierre EUR/NOK")
+       , row.names = TRUE
+       , digits = 3
+       , format.args = list( decimal.mark = ",")
+      )
+```
+
+De esta manera, en el siguiente gráfico, se muestra la evolución de la Corona Sueca y de la Corona Noruega en comparación con el Euro. El gráfico se ha realizado en base 100 para poder analizar la comparativa correctamente.
+
+```{r grafico 1,echo=FALSE}
+grafico1
+```
+
+A continuación, se puede observar el gráfico anterior con la ventaja de haberlo convertido en un gráfico dinámico. De esta manera, la evolución se puede apreciar mucho mejor y podemos observar los valores que han alcanzado las divisas en cada fecha con mayor exactitud. Al igual que en el gráfico anterior, el gráfico se ha realizado en base 100 para su correcta comparación.
+
+```{r grafico 2,echo=FALSE}
+grafico2
+```
+
+Como podemos observar en este gráfico, las dos divisas analizadas contra el Euro se han devaluado considerablemente. Se puede apreciar claramente que la Corona Sueca y la Corona Noruega llevan una relación muy similar comparándola con el euro. Es decir, a lo largo del grafico, vemos diferentes picos que coinciden en ambas divisas. Esto se puede deber a que la Corona Sueca y la Corona Noruega están bastante relacionadas. En conclusión, el Euro ha ganado valor en comparación con estas dos divisas.
+
+## Conclusión
+
+Para concluir con el trabajo, me parece importante destacar la cantidad de páginas tutoriales y formativas que existen para realizar consultas en cuanto a expresiones regulares y Mardown. Por lo tanto, creo que es básico la consulta de este tipo de páginas a la hora de aprender y trabajar con R.
+
+En cuanto a los datos analizados, tras la elaboración de los dos gráficos con los datos de divisas se ha logrado analizar la evolución de estas de una forma muy adecuada y concreta. Considerando R una herramienta muy correcta para este tipo de análisis.
+
